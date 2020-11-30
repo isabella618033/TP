@@ -1,0 +1,9 @@
+ProphetModels/
+tpaLSTM_TrainAndEval/
+data/filledData
+data/evalProphetResult
+data/evalPredictionMethodResult
+dataBackUp/
+data/fullTimesInsatance_filtered.csv
+data/fullTimesInsatance.csv
+data/uniqueBrands.csv
