@@ -19,6 +19,16 @@ import pickle
 from eval_util import suppress_stdout_stderr
 import os.path
 
+'''
+The organization of this .py is as follow
+
+1. class attriEvaluation is for the evaluation of a single attribute with a given prediction function
+2. class predictionMethodEvaluation is for a single prediction method.
+    When the argument "evalProphetOnly" was set, it will hold multiple attriEvaluation object and loop through them
+3. the prediction funcstions was set saparately
+4.
+'''
+
 class attriEvaluation:
     def __init__(self, attri, parent):
         self.attri = attri
@@ -44,33 +54,48 @@ class attriEvaluation:
             std = np.std(self.attriDF_normalized[TSIndex])
             self.attriDF_normalized[TSIndex] = (self.attriDF_normalized[TSIndex]-mean)/std
         self.attriDF_normalized.columns = [int(x) for x in self.attriDF_normalized.columns]
-        metaDF = pd.read_csv('./data/{}/meta_{}.csv'.format(self.folder,self.stage))
-        self.checkedIndex = metaDF[(metaDF["Attri"] == self.attri) & (metaDF["Model"] == self.methodName) ]['TSIndex']
+        try:
+            metaDF = pd.read_csv('./data/{}/meta_{}.csv'.format(self.folder,self.stage))
+            self.checkedIndex = metaDF[(metaDF["Attri"] == self.attri) & (metaDF["Model"] == self.methodName) ]['TSIndex']
+        except FileNotFoundError:
+             self.checkedIndex = pd.Series([])
         print(self.checkedIndex)
 
     def getMSE_singleTS(self, brandID, TS):
+        '''
+        input
+        brandID: int
+        TS: pd.Series
+
+        function
+        given the TS, loop through the TS for excessive time points, and do prediction for each of them
+
+        output
+        wholeForecast: interpreted as the last forecast for the whole period of the ForeCastingDays
+        pointForecast: the prediction made at each of the excessive time point for a single day output
+        '''
         pointForecast = []
         sampleForecast = pd.DataFrame(columns = ['trend'])
         CICount = 0
         for sampleIndex in range(len(TS)-(self.fittingDays + self.forecastingDays)):
-            sys.stdout.write("\rsampleIndex: {}".format(sampleIndex))
-            sys.stdout.flush()
+            #sys.stdout.write("\rsampleIndex: {}".format(sampleIndex))
+            #sys.stdout.flush()
             sampleTS = TS[sampleIndex : sampleIndex + self.fittingDays]
             try:
                 sampleForecast = self.predictionFunction(sampleTS, self.forecastingDays, self.attri, brandID)
                 if not isinstance(sampleForecast, pd.DataFrame):
-                    return
+                    sampleForecast = pd.Series(sampleForecast)
             except Exception as e:
                 print(e)
                 print("sampleTS", sampleTS)
-                sampleForecast = [np.nan]
+                sampleForecast = pd.Series([np.nan])
             if self.methodName == "prophet":
                 pointForecast.append ( sampleForecast["yhat"][-1])
                 if (sampleTS[-1] < sampleForecast["yhat_upper"][-1]) and (sampleTS[-1] > sampleForecast["yhat_lower"][-1]):
                     CICount += 1
                 sampleForecast = sampleForecast["yhat"]
             else:
-                pointForecast.append ( sampleForecast[-1] )
+                pointForecast.append ( sampleForecast.iloc[-1] )
 
 
         try:
@@ -137,10 +162,8 @@ class attriEvaluation:
             raise Exception("wrong stage")
 
         for TSIndex in TSList:
-            # print("TSIndex", TSIndex)
-            # print(TSIndex in self.checkedIndex.values)
+            print("TSIndex", TSIndex)
             if  not  (TSIndex in self.checkedIndex.values):
-
                 if self.stage == "rolling":
                     days = 150
                 elif (self.stage == "allTS"):
@@ -149,7 +172,8 @@ class attriEvaluation:
                     raise Exception("wrong stage")
                 try:
                     TS = self.attriDF_normalized.loc[:,TSIndex].dropna()[-days:]
-                except:
+                except Exception as e:
+                    print(e)
                     continue
                 self.getMSE_singleTS(TSIndex,TS)
 
@@ -163,52 +187,6 @@ class attriEvaluation:
         self.wholeForecast = wholeForecast[(wholeForecast["Attri"] == self.attri) & (wholeForecast["Model"] == self.methodName)]
         self.pointForecast = pointForecast[(pointForecast["Attri"] == self.attri) & (pointForecast["Model"] == self.methodName)]
 
-    def abc(self):
-        print(self.attriDF_normalized.loc[:,1223])
-
-    def visualizePrediction(self, TSIndex, forecastDays):
-
-        TS = self.attriDF_normalized.loc[:,TSIndex].dropna()[-150:]
-        X_len = min(150, len(TS))
-
-        wholeForecast_TSIndex = self.wholeForecast.loc[[TSIndex]]
-        wholeForecast_TSIndex = wholeForecast_TSIndex[wholeForecast_TSIndex['ForecastDays'] == forecastDays]
-        wholeForecast_TSIndex = wholeForecast_TSIndex.drop(['ForecastDays', "Model", "Attri"], axis = 1).set_index('FittingDays')
-        print(wholeForecast_TSIndex)
-
-        plt.figure(figsize=(20,10))
-        for FittingDays in wholeForecast_TSIndex.index:
-                wholeForecast_len = len (wholeForecast_TSIndex.loc[FittingDays].dropna())
-                wholeForecast_Plot = pd.concat([pd.Series([np.nan]*(X_len - wholeForecast_len)),  wholeForecast_TSIndex.loc[FittingDays].dropna()])
-                plt.plot(list(range(X_len)), wholeForecast_Plot , label = FittingDays)
-
-        plt.plot(list(range(X_len)), TS)
-        plt.axvline(x=[150-forecastDays])
-        plt.title('Whole estimation, ForecastingDays: {}, BrandID: {}'.format(forecastDays, TSIndex))
-        plt.xlabel('Increase')
-        plt.ylabel('Time')
-        plt.legend(title='FittingDays:')
-        plt.grid(True)
-        plt.show()
-
-        pointForecast_TSIndex = self.pointForecast.loc[TSIndex]
-        pointForecast_TSIndex = pointForecast_TSIndex[pointForecast_TSIndex['ForecastDays'] == forecastDays]
-        pointForecast_TSIndex = pointForecast_TSIndex.drop(['ForecastDays'], axis = 1).set_index('FittingDays')
-
-        plt.figure(figsize=(20,10))
-        for FittingDays in wholeForecast_TSIndex.index:
-                pointForecast_len = len(pointForecast_TSIndex.loc[FittingDays].dropna())
-                pointForecast_Plot = pd.concat([pd.Series([np.nan]*(X_len - pointForecast_len)),  pointForecast_TSIndex.loc[FittingDays].dropna()[-100:]])
-                plt.plot(list(range(X_len)), pointForecast_Plot , label = FittingDays)
-
-        plt.plot(list(range(X_len)), TS)
-        plt.axvline(x=[150-forecastDays])
-        plt.title('Rolling estimation, ForecastingDays: {}, BrandID: {}'.format(forecastDays, TSIndex))
-        plt.xlabel('Increase')
-        plt.ylabel('Time')
-        plt.grid(True)
-        plt.legend(title='FittingDays:')
-
 class predictionMethodEvaluation:
     def __init__(self,methodName ,args, predictionFunction = np.nan):
         self.methodName = methodName
@@ -218,7 +196,7 @@ class predictionMethodEvaluation:
         if args.evalProphetOnly:
             self.folder = "evalProphetResult"
             self.neededAttri = [
-                            # 'fb_likes',
+                            'fb_likes',
                             'fb_followers',
                             'fb_posts_num',
                             'fb_avg_comments_num',
@@ -237,24 +215,25 @@ class predictionMethodEvaluation:
             self.neededAttri = [
                             'fb_followers',
                             ]
-        self.eval = {}
+
+        print(self.methodName)
+        print(self.predictionFunction)
+        print(self.stage)
+        print(self.folder)
+
         for attri in self.neededAttri:
             tempClass = attriEvaluation(attri,self)
             if args.evalProphetOnly:
                 tempClass.runEvaluation()
                 del tempClass
 
-
-        print(self.eval)
-
     def runEvaluation(self):
-        for attri in self.neededAttri:
-            self.eval[attri].runEvaluation()
+        c = attriEvaluation("fb_followers", self)
+        c.runEvaluation()
 
     def setResult(self):
         for attri in self.neededAttri:
             self.eval[attri].setResults()
-
 
 def initFile(folder, stage):
     try:
@@ -266,6 +245,11 @@ def initFile(folder, stage):
 
     df = pd.DataFrame(columns = ['TSIndex','Model',"Attri","FittingDays","ForecastingDays","wholeMSE",'pointMSE',"pointMSE_SD","CIHit"])
     df.to_csv('./data/{}/meta_{}.csv'.format(folder,stage), mode='a', header=True, index = False)
+
+    col_names = [ "TSIndex","Model", "Attri", "FittingDays", "ForecastDays"] + list(range(150))
+    wholeForecast = pd.DataFrame( columns = col_names)
+    wholeForecast.to_csv('./data/{}/wholeForecast_{}.csv'.format(folder,stage), header=True)
+    wholeForecast.to_csv('./data/{}/pointForecast_{}.csv'.format(folder,stage), header=True)
 
 def splineFitPredict(TS,forecastingDays,attri, brandID):
     x = list(TS.index.values.astype('float'))
@@ -319,34 +303,21 @@ class MaxScaler:
     def transform(self, y):
         return y / self.max
 
-def tpaLSTMPredict(TS, forecastingDays, scaling,attri, brandID):
+def tpaLSTMPredict(TS, forecastingDays, attri, brandID):
 
-    if scaling == True:
-        modelPath = "/home/isabella/Documents/Radica/TP/tpaLSTM_TrainAndEval/{}.pt".format(attri)
-    else:
-        modelPath = ""
+    modelPath = "./tpaLSTMSavedModel.pt".format(attri)
 
     with open(modelPath, 'rb') as f:
         model = torch.load(f)
 
     model.eval()
-
-
-    if scaling == True:
-        scaler = MaxScaler()
-        TS = np.array([TS])
-        scale = TS[0][0]
-        # print(TS)
-        # print(scale)
-        TS = torch.from_numpy(TS/scale).float()
-        ypred = model(TS)
-        ypred = ypred[0].detach().numpy()
-        # print(ypred)
-        ypred = ypred*scale
-    else:
-        TS = torch.from_numpy(np.array([TS])).float()
-        ypred = model(TS)
-        ypred = ypred[0].detach().numpy()
+    scaler = MaxScaler()
+    TS = np.array([TS])
+    scale = TS[0][0]
+    TS = torch.from_numpy(TS/scale).float()
+    ypred = model(TS)
+    ypred = ypred[0].detach().numpy()
+    ypred = ypred*scale
     return ypred
 
 def arimaPredict(TS, forecastingDays,attri, brandID):
@@ -354,36 +325,44 @@ def arimaPredict(TS, forecastingDays,attri, brandID):
     forecasts = model.predict(forecastingDays)
     return forecasts
 
-
 if __name__ == "__main__":
+    """
+    this code is not useful for the implementation
+    this piece of code is supposed to test out all the prediction methods ans see which is the best,
+    for the details of how to specify the arguments, please check the help function
+    for the visualization of the reult, interpretPredictionResult.py has to be ran
+    """
+
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cleanFile', action="store_true",help='location of the data file')
-    parser.add_argument('--evalSpline', action="store_true", help='location of the data file')
-    parser.add_argument('--evalProphet', action="store_true", help='location of the data file')
-    parser.add_argument('--evaltpaLSTM',action="store_true",help='location of the data file')
-    parser.add_argument('--evalARIMA',action="store_true",help='location of the data file')
-    parser.add_argument('--scale',action="store_true",help='location of the data file')
-    parser.add_argument('--stageAllTS',action="store_true",help='location of the data file')
-    parser.add_argument('--evalProphetOnly', action="store_true", help='location of the data file')
+    parser.add_argument('--cleanFile', action="store_true",help='clean the place where the prediction result was stored')
+    parser.add_argument('--evalSpline', action="store_true", help='eval the spline prediction method')
+    parser.add_argument('--evalProphet', action="store_true", help='eval prophe prediction method')
+    parser.add_argument('--evaltpaLSTM',action="store_true",help='eval the tpaLSTM prediction method')
+    parser.add_argument('--evalARIMA',action="store_true",help='eval the ARIMA prediction method')
+    parser.add_argument('--stageAllTS',action="store_true",help='if true, then all the TS would be evaluated according to the last prediction, if false, the evaluation would be ran on sampled TS rolling based')
+    parser.add_argument('--evalProphetOnly', action="store_true", help='this setting would override all the other settings. if true, all the attributes would be evaluated, if false, only the fb_follower would be evaluated')
     args = parser.parse_args()
+
 
     if args.stageAllTS:
         args.stage = "allTS"
     else:
         args.stage = "rolling"
 
-    if args.scale:
-        scale = "SCALE"
-    else:
-        scale =""
+    scale = "SCALE"
 
     if args.evalProphetOnly:
         folder = "evalProphetResult"
     else:
         folder = "evalPredictionMethodResult"
 
-    # if args.cleanFile:
-    #     initFile(folder,args.stage)
+    if not os.path.isdir("./data/{}".format(folder)):
+        os.mkdir("./data/{}".format(folder))
+        initFile(folder,args.stage)
+
+    if args.cleanFile:
+        initFile(folder,args.stage)
 
     if args.evalProphetOnly:
         # https://github.com/facebook/prophet/issues/725
@@ -399,7 +378,7 @@ if __name__ == "__main__":
             splineEval.runEvaluation()
 
         if args.evaltpaLSTM :
-            tpaLSTMEval = predictionMethodEvaluation("tpaLSTM"+scale, args, lambda x,y : tpaLSTMPredict(x,y, args.scale) )
+            tpaLSTMEval = predictionMethodEvaluation("tpaLSTM"+scale, args, tpaLSTMPredict )
             tpaLSTMEval.runEvaluation()
 
         if args.evalARIMA :

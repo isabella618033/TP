@@ -14,6 +14,9 @@ import pandas as pd
 from datetime import date
 from util import *;
 
+"""
+this piece of code specift the TPALSTM model, dont touch it if you dont know what is happening here
+"""
 class TPALSTM(nn.Module):
 
     def __init__(self, input_size, output_horizon, hidden_size, obs_len, n_layers):

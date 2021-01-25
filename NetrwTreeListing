@@ -1,0 +1,29 @@
+" ============================================================================
+" Netrw Directory Listing                                        (netrw v165)
+"   /home/isabella/Documents/Radica/TP/data
+"   Sorted by      name
+"   Sort sequence: [\/]$,\<core\%(\.\d\+\)\=\>,\.h$,\.c$,\.cpp$,\~\=\*$,*,\.o$,\.obj$,\.info$,\.swp$,\.bak$,\~$
+"   Quick Help: <F1>:help  -:go up dir  D:delete  R:rename  s:sort-by  x:special
+" ==============================================================================
+../
+TP/
+| .git/
+| __pycache__/
+| data/
+| | socialstat/
+| dataBackup/
+| tpaLSTM_TrainAndEval/
+| .gitignore
+| README.md
+| cleanData.py
+| eval_util.py
+| evaluatePredictionMethods.py
+| evaluateVAR.py
+| explore.py
+| fillData.py
+| interpretFilledData.py
+| interpretPredictionResult.py
+| tpaLSTM.py
+| tpaLSTMSavedModel.pt
+| util.py
+| .explore.py.swp

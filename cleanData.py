@@ -10,8 +10,17 @@ from os import listdir
 from os.path import isfile, join
 import re
 
+
 class DataPreporation:
+    """
+    This class will clean the data upon initialization
+    1. collect all data from all related CSV
+    2. duplicated brands would be removed
+    3. some data with too few observations would be removed
+    4. the result would be exported as csv
+    """
     def __init__(self):
+        self.dataPath = "./data/socialstat/"
         self.collectAllData()
         self.removeDuplicatedBrands()
         self.filterDataByCount()
@@ -19,6 +28,11 @@ class DataPreporation:
         pass
 
     def getUsername(self, link):
+        """
+        input
+        link: a link-like string from facebook
+        output: the user name that we can get from the link
+        """
         fbSearchRegex = '(?<=.com/)\w+'
         fb_url = 'https://facebook.com/accounts/login/?next...'
 
@@ -31,8 +45,14 @@ class DataPreporation:
         return math.nan
 
     def collectAllData(self):
-        dataPath = "./data/socialstat/"
-
+        """
+        function
+        -conjunct all .csv file from the dataPath specified as follow
+        
+        output
+        -set self.allNeededData, including the required columns specified by the neededColumns
+        """
+        dataPath = self.dataPath
         allName = [f for f in listdir(dataPath) if isfile(join(dataPath, f))]
         allDFList = [pd.read_csv(dataPath + f) for f in listdir(dataPath) if isfile(join(dataPath, f))]
         allData = pd.concat(allDFList, keys=allName)
@@ -59,14 +79,22 @@ class DataPreporation:
         self.allNeededData = allNeededData
 
     def findUniqueCorrespondant (self, groupByCol, countCol):
+        """
+        function
+        -get a list of unique correspondance between groupByCol and CountCol
+        """
         s = self.allNeededData.groupby(groupByCol)[countCol].nunique()
         sOne2One = s[s <= 1]
-        sOne2Multi = s[s > 1]
         return sOne2One
 
     #unique correspondant
     def checkUC(self, fb_username , ig_username):
-
+        """
+        (UC stands for unique correspondance)
+        
+        function
+        -check if both the fb_username and the ig_username have UC
+        """
         isString1 = isinstance(fb_username, str)
         isString2 = isinstance(ig_username, str)
 
@@ -78,6 +106,10 @@ class DataPreporation:
         return flag1 & flag2
 
     def fetchDFByUserName(self, fb_url , ig_url):
+        """
+        function
+        -get the brand for the specified fb_url and ig_url
+        """
         isString_FB = isinstance(fb_url, str)
         isString_IG = isinstance(ig_url, str)
 
@@ -90,12 +122,25 @@ class DataPreporation:
         return result
 
     def fetchDFForAValue(self, x, fieldNames):
+        """
+        function
+        - this function is mainly for handling brands with conflicting information in the allBrands dataframe
+        -for all entries with the specified fb-username from the allBrnds dataframe, returthe information that was firstly specified
+        """
         df = self.fetchDFByUserName(x.fb_username , x.ig_username)
         for fieldName in fieldNames:
             x[fieldName] = df[fieldName].dropna().iloc[0] if (df[fieldName].dropna().size != 0) else math.nan
         return x
 
     def removeDuplicatedBrands(self):
+        """
+        function
+        - the main funcition for removing all duplicated brands in the allBrands dataframe
+        
+        output
+        - self.uniqueBrands would be set
+        - self.cleanTimeInstance would be set
+        """
         self.One2OneFB2IG = self.findUniqueCorrespondant ('fb_username', 'ig_username').index
         self.One2OneIG2FB = self.findUniqueCorrespondant ('ig_username', 'fb_username').index
 
@@ -134,13 +179,28 @@ class DataPreporation:
         self.fullTimesInsatance = fullTimesInsatance.groupby(['brandID', 'created']).last().reset_index()
 
     def countFiltering (self,x):
+        """
+        function
+        - remove if the number of observation is less than 60% of the whole period of the observation of that brand OR the total number of onserved days is less than 30 days
+
+        input
+        - a row
+
+        output
+        - true if the requirement was satisfied, false if not
+        """
         try:
             return (self.countInPercentage[x['brandID']] > 0.6) & (self.dayCountByBrandID[x['brandID']] > 30)
         except:
             return False
 
     def filterDataByCount(self):
-
+        """
+        function
+        - set up self.dayCountByBrandID: the length of period of observation 
+        - set up self.countInPercentage: for the number of observation over the dayCountByBrandID
+        - set up self.fulltimeInstance_filtered: the resulting dataframe 
+        """
         fullTimesInsatance = self.fullTimesInsatance.copy()
         fullTimesInsatance = fullTimesInsatance.groupby(['brandID', 'created']).last().reset_index()
         brandsObservationsCount = fullTimesInsatance.groupby('brandID').count()
