@@ -78,8 +78,8 @@ class attriEvaluation:
         sampleForecast = pd.DataFrame(columns = ['trend'])
         CICount = 0
         for sampleIndex in range(len(TS)-(self.fittingDays + self.forecastingDays)):
-            #sys.stdout.write("\rsampleIndex: {}".format(sampleIndex))
-            #sys.stdout.flush()
+            sys.stdout.write("\rsampleIndex: {}".format(sampleIndex))
+            sys.stdout.flush()
             sampleTS = TS[sampleIndex : sampleIndex + self.fittingDays]
             try:
                 sampleForecast = self.predictionFunction(sampleTS, self.forecastingDays, self.attri, brandID)
@@ -246,10 +246,10 @@ def initFile(folder, stage):
     df = pd.DataFrame(columns = ['TSIndex','Model',"Attri","FittingDays","ForecastingDays","wholeMSE",'pointMSE',"pointMSE_SD","CIHit"])
     df.to_csv('./data/{}/meta_{}.csv'.format(folder,stage), mode='a', header=True, index = False)
 
-    col_names = [ "TSIndex","Model", "Attri", "FittingDays", "ForecastDays"] + list(range(150))
+    col_names = [ "TSIndex","Model", "Attri", "FittingDays", "ForecastDays"] + list(range(90))
     wholeForecast = pd.DataFrame( columns = col_names)
-    wholeForecast.to_csv('./data/{}/wholeForecast_{}.csv'.format(folder,stage), header=True)
-    wholeForecast.to_csv('./data/{}/pointForecast_{}.csv'.format(folder,stage), header=True)
+    wholeForecast.to_csv('./data/{}/wholeForecast_{}.csv'.format(folder,stage), index = False, header = True)
+    wholeForecast.to_csv('./data/{}/pointForecast_{}.csv'.format(folder,stage), index = False, header = True)
 
 def splineFitPredict(TS,forecastingDays,attri, brandID):
     x = list(TS.index.values.astype('float'))
@@ -279,7 +279,7 @@ def prophetFitPredict(TS,forecastingDays,attri, brandID):
     else:
         print("building model")
         m = Prophet()
-        with suppress_stdout_stderr():
+        with suppress_stdout_stderr() as s:
             m.fit(TS)
             # with open(pkl_path, "wb") as f:
             #     pickle.dump(m, f)
@@ -357,7 +357,7 @@ if __name__ == "__main__":
     else:
         folder = "evalPredictionMethodResult"
 
-    if not os.path.isdir("./data/{}".format(folder)):
+    if (not os.path.isdir("./data/{}".format(folder))) or (not os.path.isdir("./data/{}/meta_{}.csv".format(folder, args.stage))):
         os.mkdir("./data/{}".format(folder))
         initFile(folder,args.stage)
 

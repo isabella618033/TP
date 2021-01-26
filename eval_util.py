@@ -27,3 +27,6 @@ class suppress_stdout_stderr(object):
         # Close the null files
         os.close(self.null_fds[0])
         os.close(self.null_fds[1])
+
+        os.close(self.save_fds[0])
+        os.close(self.save_fds[0])

@@ -1,10 +1,13 @@
-#!/bin/bash/
+#!/bin/bash
 
-rm -r ./data/!(socialstat)
+cd ./data
+find . -type d ! -name "socialstat" -delete
+cd ..
 mkdir ./data/filledData/
 mkdir ./data/pic/
 mkdir ./data/pic/explore/
 mkdir ./data/pic/explore/allFBFollowers/
 mkdir ./data/pic/explore/suspiciousFBFollowers/
-nkdir ./data/pic/rankingStat/
-nkdir ./data/pic/checkRanking/
+mkdir ./data/pic/rankingStat/
+mkdir ./data/pic/checkRanking/
+/
